@@ -157,7 +157,7 @@ def get_candidate_documents_and_scores(query_to_search, index):
     candidates = {}
     N = 6348910
     for term in np.unique(query_to_search):
-        list_of_doc = read_posting_list(inverted, 'python')
+        list_of_doc = read_posting_list(inverted, term)
         if len(list_of_doc)>0:
             normlized_tfidf = [(doc_id, freq * math.log(N / index.df[term], 10)) for doc_id, freq in
                                list_of_doc]
@@ -195,6 +195,7 @@ def generate_document_tfidf_matrix(query_to_search, index):
 
     #D = np.zeros((len(unique_candidates), total_vocab_size))
     D = np.zeros((len(unique_candidates), len(query_to_search)))
+
     D = pd.DataFrame(D)
 
     D.index = unique_candidates
@@ -231,24 +232,37 @@ def cosine_similarity(D, Q):
                                                                 value: cosine similarty score.
     """
     # YOUR CODE HERE
-    ret_dic = {}
-    for num in range(len(D)):
-        co = sum([o * t for o, t in zip(Q, D.iloc[num])])
-
-        Qsum = sum([o * o for o in Q])
-
-        Dsum = sum([o * o for o in D.iloc[num]])
-
-        QanDmul = Qsum * Dsum
-        QandD = QanDmul ** 0.5
-        final = co / QandD
-        place = int(D.iloc[num].name)
-        ret_dic[place] = round(final, 5)
-    return ret_dic
-
-    raise NotImplementedError()
+    dic = {}
+    left = sum([a ** 2 for a in Q])
+    for i in range(len(D)):
+        up = sum([a * b for a, b in zip(Q, D.iloc[i])])
+        right = sum([a ** 2 for a in D.iloc[i]])
+        sum_down = (left * right) ** 0.5
+        total = up / sum_down
+        dic[int(D.iloc[i].name)] = round(total, 5)
+    return dic
 
 
+def get_top_n(sim_dict, N=3):
+    """
+    Sort and return the highest N documents according to the cosine similarity score.
+    Generate a dictionary of cosine similarity scores
+
+    Parameters:
+    -----------
+    sim_dict: a dictionary of similarity score as follows:
+                                                                key: document id (e.g., doc_id)
+                                                                value: similarity score. We keep up to 5 digits after the decimal point. (e.g., round(score,5))
+
+    N: Integer (how many documents to retrieve). By default N = 3
+
+    Returns:
+    -----------
+    a ranked list of pairs (doc_id, score) in the length of N.
+    """
+
+    return sorted([(doc_id, round(score, 5)) for doc_id, score in sim_dict.items()], key=lambda x: x[1], reverse=True)[
+           :N]
 
 
 
@@ -258,20 +272,37 @@ def cosine_similarity(D, Q):
 #
 # print(pl)
 
-Q=(generate_query_tfidf_vector(['data','science'],inverted))
-#l=get_candidate_documents_and_scores(['data','science'],inverted)
-D=generate_document_tfidf_matrix(['data','science'],inverted)
-cs=cosine_similarity(D, Q)
-print(cs)
+# Q=(generate_query_tfidf_vector(['data','science'],inverted))
+# # l=get_candidate_documents_and_scores(['data','science'],inverted)
+# # print(l)
+# D=generate_document_tfidf_matrix(['data','science'],inverted)
+# # print(D)
+#
+# shortQ=[]
+# for x in Q:
+#     if (x!=0):
+#         shortQ.append(x)
+# #print(shortQ)
+#
+#
+# cs=cosine_similarity(D, shortQ)
+# topn=get_top_n(cs, N=100)
+# print(topn)
+# for i in cs:
+#     if cs[i]!=0:
+#      print(i)
 
 
 
 # print(words)
 # print(pls)
 
-# pl = read_posting_list(inverted, 'python')
-#
-# print((pl))
+pl = read_posting_list(inverted, 'science')
+
+
+for tup in pl:
+    if tup[0]== 35458904:
+        print(tup)
 
 
 #with open('IndexTry.pkl', 'wb') as outp:
