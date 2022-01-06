@@ -5,11 +5,14 @@ import math
 import pandas as pd
 from operator import itemgetter
 import re
+import nltk
+nltk.download('stopwords')
 from nltk.stem.porter import *
 from nltk.corpus import stopwords
-import nltk
-from time import time
 
+from time import time
+from google.cloud import storage
+import os
 
 from flask import Flask, request, jsonify
 
@@ -32,6 +35,7 @@ class MultiFileReader:
             # for f_name in locs:
 
             if f_name not in self._open_files:
+                #self._open_files[f_name] = open(f_name, 'rb')
                 self._open_files[f_name] = open('postings_gcp/'+f_name, 'rb')
             f = self._open_files[f_name]
             f.seek(offset)
@@ -313,6 +317,21 @@ english_stopwords = frozenset(stopwords.words('english'))
 
 
 
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"]='myfirstproject-329911-1e93f669b9fa.json'
+
+
+with open(f'postings_gcp/index.pkl', 'rb') as inp:
+        inverted = pickle.load(inp)
+
+# bucket_name='315302083'
+# client = storage.Client()
+# blobs = client.list_blobs(bucket_name)
+# for b in blobs:
+#     if(b.name=='postings_gcp/index.pkl'):
+#         x=b
+#
+# with open(x, 'rb') as inp:
+#     inverted = pickle.load(inp)
 
 #==================
 
@@ -350,8 +369,8 @@ def search():
 
     # BEGIN SOLUTION
 
-    with open(f'postings_gcp\index.pkl', 'rb') as inp:
-        inverted = pickle.load(inp)
+    # with open(f'postings_gcp\index.pkl', 'rb') as inp:
+    #     inverted = pickle.load(inp)
 
     token = tokenize(query)
     w = filter_tokens(token, english_stopwords)

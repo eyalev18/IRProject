@@ -10,14 +10,21 @@ from nltk.corpus import stopwords
 import nltk
 from time import time
 from google.cloud import storage
+import os
 
-# bucket_name = '315302083'
-# index_dst = f'gs://{bucket_name}/postings_gcp/index.pkl'
-# print(index_dst)
+#'myfirstproject-329911-1e93f669b9fa.json'
+# b'C:\Users\Owner\Downloads\'myfirstproject-329911-1e93f669b9fa.json'ucket_name = '315302083'
+# os.environ["GOOGLE_APPLICATION_CREDENTIALS"]='myfirstproject-329911-1e93f669b9fa.json'
+#
+#
+#
+# bucket_name='315302083'
 # client = storage.Client()
 # blobs = client.list_blobs(bucket_name)
 # for b in blobs:
-#     print(b.name)
+#     if(b.name=='postings_gcp/index.pkl'):
+#         x=b
+#         print(x[1])
 
 #nltk.download('stopwords')
 
@@ -27,7 +34,8 @@ from google.cloud import storage
 with open(f'postings_gcp\index.pkl', 'rb') as inp:
     inverted = pickle.load(inp)
 
-# with open(f'gs://{bucket_name}/postings_gcp/index.pkl', 'rb') as inp:
+
+# with open(x, 'rb') as inp:
 #     inverted = pickle.load(inp)
 
 
@@ -181,6 +189,7 @@ def get_candidate_documents_and_scores(query_to_search, index):
     N = 6348910
     for term in np.unique(query_to_search):
         list_of_doc = read_posting_list(index, term)
+        test = dict(list_of_doc)
         if len(list_of_doc)>0:
             normlized_tfidf = [(doc_id, freq * math.log(N / index.df[term], 10)) for doc_id, freq in
                                list_of_doc]
@@ -227,6 +236,7 @@ def generate_document_tfidf_matrix(query_to_search, index):
     #D.columns = index.df.keys()\
     D.columns = query_to_search
 
+
     for key in candidates_scores:
         tfidf = candidates_scores[key]
         doc_id, term = key
@@ -258,7 +268,7 @@ def cosine_similarity(D, Q):
     """
     # YOUR CODE HERE
     dic = {}
-    #left = sum([a ** 2 for a in Q])
+  #  left = sum([a ** 2 for a in Q])
     for i in range(len(D)):
         x=0
         # ser=pd.Series(D.iloc[i])
@@ -376,28 +386,28 @@ RE_WORD = re.compile(r"""[\#\@\w](['\-]?\w){2,24}""", re.UNICODE)
 
 
 
-word= "best marvel"
-token=tokenize(word)
-w=filter_tokens(token,english_stopwords)
-print(w)
-
-Q=(generate_query_tfidf_vector(w,inverted))
-print(1)
-D=generate_document_tfidf_matrix(w,inverted)
-print(2)
+# word= "best marvel"
+# token=tokenize(word)
+# w=filter_tokens(token,english_stopwords)
+# print(w)
 #
-shortQ=[]
-for x in Q:
-    if (x!=0):
-        shortQ.append(x)
-# print(shortQ)
+# Q=(generate_query_tfidf_vector(w,inverted))
+# print(1)
+# D=generate_document_tfidf_matrix(w,inverted)
+# print(2)
+# #
+# shortQ=[]
+# for x in Q:
+#     if (x!=0):
+#         shortQ.append(x)
+# # print(shortQ)
+#
+# cs=cosine_similarity(D, shortQ)
+# topn=get_top_n(cs, N=100)
+# print(topn)
 
-cs=cosine_similarity(D, shortQ)
-topn=get_top_n(cs, N=100)
-print(topn)
 
 
-'''
 def average_precision(true_list, predicted_list, k=40):
     true_set = frozenset(true_list)
     predicted_list = predicted_list[:k]
@@ -428,6 +438,7 @@ for q, true_wids in queries.items():
     for x in Q:
         if (x!=0):
             shortQ.append(x)
+    print(shortQ )
     cs=cosine_similarity(D, shortQ)
     topn=get_top_n(cs, N=100)
     duration = time() - t_start
@@ -441,7 +452,6 @@ print(qs_res)
 print(a/len(qs_res))
 where_does_vanilla_flavoring_come_from=['where','does','vanilla','flavoring','come','from']
 
-'''
 #3951433,62637003,103325
 
 # rubber_duck = ['rubber', 'duck']
