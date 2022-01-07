@@ -31,8 +31,16 @@ import os
 
 #
 #
-with open(f'postings_gcp\index.pkl', 'rb') as inp:
-    inverted = pickle.load(inp)
+
+with open(f'postings_title\TitleIndex.pkl', 'rb') as inp:
+    title_index = pickle.load(inp)
+
+#print((title_index.posting_locs))
+
+
+
+# with open(f'postings_gcp\index.pkl', 'rb') as inp:
+#     inverted = pickle.load(inp)
 
 
 # with open(x, 'rb') as inp:
@@ -81,6 +89,21 @@ class MultiFileReader:
     def __init__(self):
         self._open_files = {}
 
+    def title_read(self, locs, n_bytes):
+        b = []
+        #locs = [locs]
+        for f_name, offset in locs:
+            # for f_name in locs:
+
+            if f_name not in self._open_files:
+                self._open_files[f_name] = open('postings_title/'+f_name, 'rb')
+            f = self._open_files[f_name]
+            f.seek(offset)
+            n_read = min(n_bytes, BLOCK_SIZE - offset)
+            b.append(f.read(n_read))
+            n_bytes -= n_read
+        return b''.join(b)
+
     def read(self, locs, n_bytes):
         b = []
         #locs = [locs]
@@ -116,6 +139,20 @@ def read_posting_list(inverted, w):
       posting_list.append((doc_id, tf))
     return posting_list
 
+
+def read_posting_list_title(inverted, w):
+  with closing(MultiFileReader()) as reader:
+    locs = inverted.posting_locs[w]
+    b = reader.title_read(locs, inverted.df[w] * TUPLE_SIZE)
+    posting_list = []
+    for i in range(inverted.df[w]):
+      doc_id = int.from_bytes(b[i*TUPLE_SIZE:i*TUPLE_SIZE+4], 'big')
+      tf = int.from_bytes(b[i*TUPLE_SIZE+4:(i+1)*TUPLE_SIZE], 'big')
+      posting_list.append((doc_id, tf))
+    return posting_list
+
+list_of_doc = read_posting_list(title_index, 'python')
+print(list_of_doc)
 
 def generate_query_tfidf_vector(query_to_search, index):
     """
@@ -193,7 +230,7 @@ def get_candidate_documents_and_scores(query_to_search, index):
         if len(list_of_doc)>0:
             normlized_tfidf = [(doc_id, freq * math.log(N / index.df[term], 10)) for doc_id, freq in
                                list_of_doc]
-
+            #print(normlized_tfidf)
             for doc_id, tfidf in normlized_tfidf:
                 candidates[(doc_id, term)] = candidates.get((doc_id, term), 0) + tfidf
     #candidates= take(20,000, candidates.items())
@@ -407,50 +444,50 @@ RE_WORD = re.compile(r"""[\#\@\w](['\-]?\w){2,24}""", re.UNICODE)
 # print(topn)
 
 
-
-def average_precision(true_list, predicted_list, k=40):
-    true_set = frozenset(true_list)
-    predicted_list = predicted_list[:k]
-    precisions = []
-    for i,doc_id in enumerate(predicted_list):
-        if doc_id in true_set:
-            prec = (len(precisions)+1) / (i+1)
-            precisions.append(prec)
-    if len(precisions) == 0:
-        return 0.0
-    return round(sum(precisions)/len(precisions),3)
-
-import json
-
-with open('queries_train.json', 'rt') as f:
-  queries = json.load(f)
-
-qs_res = []
-a=0
-for q, true_wids in queries.items():
-    duration, ap = None, None
-    t_start = time()
-    token=tokenize(q)
-    w=filter_tokens(token,english_stopwords)
-    Q = (generate_query_tfidf_vector(w, inverted))
-    D=generate_document_tfidf_matrix(w,inverted)
-    shortQ=[]
-    for x in Q:
-        if (x!=0):
-            shortQ.append(x)
-    print(shortQ )
-    cs=cosine_similarity(D, shortQ)
-    topn=get_top_n(cs, N=100)
-    duration = time() - t_start
-    #print(topn)
-    pred_wids, _ = zip(*topn)
-    ap = average_precision(true_wids, pred_wids)
-    qs_res.append((q, duration, ap))
-    print((q, duration, ap))
-    a+=ap
-print(qs_res)
-print(a/len(qs_res))
-where_does_vanilla_flavoring_come_from=['where','does','vanilla','flavoring','come','from']
+#
+# def average_precision(true_list, predicted_list, k=40):
+#     true_set = frozenset(true_list)
+#     predicted_list = predicted_list[:k]
+#     precisions = []
+#     for i,doc_id in enumerate(predicted_list):
+#         if doc_id in true_set:
+#             prec = (len(precisions)+1) / (i+1)
+#             precisions.append(prec)
+#     if len(precisions) == 0:
+#         return 0.0
+#     return round(sum(precisions)/len(precisions),3)
+#
+# import json
+#
+# with open('queries_train.json', 'rt') as f:
+#   queries = json.load(f)
+#
+# qs_res = []
+# a=0
+# for q, true_wids in queries.items():
+#     duration, ap = None, None
+#     t_start = time()
+#     token=tokenize(q)
+#     w=filter_tokens(token,english_stopwords)
+#     Q = (generate_query_tfidf_vector(w, inverted))
+#     D=generate_document_tfidf_matrix(w,inverted)
+#     shortQ=[]
+#     for x in Q:
+#         if (x!=0):
+#             shortQ.append(x)
+#     #print(shortQ )
+#     cs=cosine_similarity(D, shortQ)
+#     topn=get_top_n(cs, N=100)
+#     duration = time() - t_start
+#     #print(topn)
+#     pred_wids, _ = zip(*topn)
+#     ap = average_precision(true_wids, pred_wids)
+#     qs_res.append((q, duration, ap))
+#     print((q, duration, ap))
+#     a+=ap
+# print(qs_res)
+# print(a/len(qs_res))
+# where_does_vanilla_flavoring_come_from=['where','does','vanilla','flavoring','come','from']
 
 #3951433,62637003,103325
 
@@ -466,23 +503,45 @@ where_does_vanilla_flavoring_come_from=['where','does','vanilla','flavoring','co
 #
 #
 #
-def average_precision(true_list, predicted_list, k=40):
-    true_set = frozenset(true_list)
-    predicted_list = predicted_list[:k]
-    precisions = []
-    for i,doc_id in enumerate(predicted_list):
-        if doc_id in true_set:
-            prec = (len(precisions)+1) / (i+1)
-            precisions.append(prec)
-    if len(precisions) == 0:
-        return 0.0
-    return round(sum(precisions)/len(precisions),3)
+# def average_precision(true_list, predicted_list, k=40):
+#     true_set = frozenset(true_list)
+#     predicted_list = predicted_list[:k]
+#     precisions = []
+#     for i,doc_id in enumerate(predicted_list):
+#         if doc_id in true_set:
+#             prec = (len(precisions)+1) / (i+1)
+#             precisions.append(prec)
+#     if len(precisions) == 0:
+#         return 0.0
+#     return round(sum(precisions)/len(precisions),3)
+# #
+# #
+# true_list=[57069491, 65967176, 42163310, 878659, 27306717, 41677925, 1074657, 44240443, 17296107, 60952488, 43603241, 22114132, 46208997, 36450985, 41974555, 56289672, 60616450, 59502488, 33038861, 61699239, 61651800, 39368416, 29129051, 55935213, 54537218, 62372638, 60774345, 63090183, 37497391, 51430647, 67229718, 9110929, 61329320, 44254295, 41974496, 200563, 58481694, 48530084, 56289572, 22144990, 612052, 59162931, 55511148, 55511147, 61073786, 59892, 36484005, 36484254, 66423851, 62482816, 1275470, 5676692, 7927053, 60754840, 26999426, 60744481, 56289553, 60463979, 701741, 60283633, 1129847, 36439749, 4451883, 55511155, 22144721, 45359871, 723126, 43655965, 57275457, 12673434, 43867095, 26763420, 39293265, 15003874, 41668588, 61592102, 67063919, 11891433, 64057670, 61513780, 39345917, 67063906, 1221476, 41008758, 60587000, 7729, 2152196, 5027882, 509738, 403585, 26866372, 1339248, 3473503, 4148655]
 #
+# res=[(18307001, 1220.62918), (18636995, 1071.44117), (21720983, 927.18499), (24572192, 801.4232), (16142831, 728.67863), (14314727, 673.19549), (3306354, 602.91684), (4036172, 573.32583), (28174239, 546.20073), (14551473, 541.2689), (30172694, 517.84268), (7317283, 504.28014), (57977922, 495.64943), (4224440, 488.25167), (14938664, 485.78576), (3663849, 479.62096), (9425157, 474.68913), (24604354, 472.22321), (7706340, 470.99025), (47207631, 456.19474), (303981, 420.43894), (3362779, 406.87639), (24837269, 399.47864), (60983259, 399.47864), (46736596, 398.24568), (64071066, 397.01272), (2794268, 392.08089), (16831542, 383.45018), (1241849, 376.05242), (11304669, 374.81947), (67175796, 374.81947), (625413, 353.85917), (13215306, 348.92733), (24146034, 345.22846), (7081866, 343.9955), (42773108, 343.9955), (21475702, 337.8307), (20842611, 336.59774), (36048519, 336.59774), (4151001, 331.66591), (41375240, 330.43295), (52583447, 315.63744), (53070348, 314.40449), (60727309, 314.40449), (35232529, 309.47265), (11605778, 307.00673), (42773116, 307.00673), (9149389, 300.84194), (13020084, 294.67715), (52583855, 294.67715), (3627682, 287.27939), (3382456, 286.04643), (33967871, 286.04643), (901742, 284.81348), (3017764, 283.58052), (32398891, 283.58052), (56818610, 278.64868), (1964969, 277.41572), (7893660, 277.41572), (41579194, 276.18276), (30839552, 274.94981), (35787446, 273.71685), (44936694, 271.25093), (56025646, 270.01797), (7369530, 268.78501), (14030366, 268.78501), (21834676, 268.78501), (59204030, 265.08614), (2845957, 262.62022), (52592185, 262.62022), (12839459, 261.38726), (38740754, 261.38726), (1488937, 260.1543), (36890459, 260.1543), (12523627, 258.92134), (6236356, 257.68838), (21281430, 256.45542), (23199340, 256.45542), (55997551, 256.45542), (39467037, 253.98951), (47441413, 252.75655), (1856911, 251.52359), (2830666, 249.05767), (22292298, 247.82471), (33740155, 246.59175), (53654218, 246.59175), (66570306, 246.59175), (6027734, 244.12584), (25645175, 244.12584), (31868355, 244.12584), (33790441, 242.89288), (62501055, 242.89288), (1070235, 241.65992), (3483096, 236.72808), (11088709, 235.49512), (57461112, 234.26217), (22421210, 231.79625), (151343, 230.56329), (58823153, 229.33033), (59241382, 228.09737)]
 #
-true_list=[57069491, 65967176, 42163310, 878659, 27306717, 41677925, 1074657, 44240443, 17296107, 60952488, 43603241, 22114132, 46208997, 36450985, 41974555, 56289672, 60616450, 59502488, 33038861, 61699239, 61651800, 39368416, 29129051, 55935213, 54537218, 62372638, 60774345, 63090183, 37497391, 51430647, 67229718, 9110929, 61329320, 44254295, 41974496, 200563, 58481694, 48530084, 56289572, 22144990, 612052, 59162931, 55511148, 55511147, 61073786, 59892, 36484005, 36484254, 66423851, 62482816, 1275470, 5676692, 7927053, 60754840, 26999426, 60744481, 56289553, 60463979, 701741, 60283633, 1129847, 36439749, 4451883, 55511155, 22144721, 45359871, 723126, 43655965, 57275457, 12673434, 43867095, 26763420, 39293265, 15003874, 41668588, 61592102, 67063919, 11891433, 64057670, 61513780, 39345917, 67063906, 1221476, 41008758, 60587000, 7729, 2152196, 5027882, 509738, 403585, 26866372, 1339248, 3473503, 4148655]
+# pred_wids, _ = zip(*res)
+#
+# print(average_precision(true_list,pred_wids))
 
-res=[(18307001, 1220.62918), (18636995, 1071.44117), (21720983, 927.18499), (24572192, 801.4232), (16142831, 728.67863), (14314727, 673.19549), (3306354, 602.91684), (4036172, 573.32583), (28174239, 546.20073), (14551473, 541.2689), (30172694, 517.84268), (7317283, 504.28014), (57977922, 495.64943), (4224440, 488.25167), (14938664, 485.78576), (3663849, 479.62096), (9425157, 474.68913), (24604354, 472.22321), (7706340, 470.99025), (47207631, 456.19474), (303981, 420.43894), (3362779, 406.87639), (24837269, 399.47864), (60983259, 399.47864), (46736596, 398.24568), (64071066, 397.01272), (2794268, 392.08089), (16831542, 383.45018), (1241849, 376.05242), (11304669, 374.81947), (67175796, 374.81947), (625413, 353.85917), (13215306, 348.92733), (24146034, 345.22846), (7081866, 343.9955), (42773108, 343.9955), (21475702, 337.8307), (20842611, 336.59774), (36048519, 336.59774), (4151001, 331.66591), (41375240, 330.43295), (52583447, 315.63744), (53070348, 314.40449), (60727309, 314.40449), (35232529, 309.47265), (11605778, 307.00673), (42773116, 307.00673), (9149389, 300.84194), (13020084, 294.67715), (52583855, 294.67715), (3627682, 287.27939), (3382456, 286.04643), (33967871, 286.04643), (901742, 284.81348), (3017764, 283.58052), (32398891, 283.58052), (56818610, 278.64868), (1964969, 277.41572), (7893660, 277.41572), (41579194, 276.18276), (30839552, 274.94981), (35787446, 273.71685), (44936694, 271.25093), (56025646, 270.01797), (7369530, 268.78501), (14030366, 268.78501), (21834676, 268.78501), (59204030, 265.08614), (2845957, 262.62022), (52592185, 262.62022), (12839459, 261.38726), (38740754, 261.38726), (1488937, 260.1543), (36890459, 260.1543), (12523627, 258.92134), (6236356, 257.68838), (21281430, 256.45542), (23199340, 256.45542), (55997551, 256.45542), (39467037, 253.98951), (47441413, 252.75655), (1856911, 251.52359), (2830666, 249.05767), (22292298, 247.82471), (33740155, 246.59175), (53654218, 246.59175), (66570306, 246.59175), (6027734, 244.12584), (25645175, 244.12584), (31868355, 244.12584), (33790441, 242.89288), (62501055, 242.89288), (1070235, 241.65992), (3483096, 236.72808), (11088709, 235.49512), (57461112, 234.26217), (22421210, 231.79625), (151343, 230.56329), (58823153, 229.33033), (59241382, 228.09737)]
 
-pred_wids, _ = zip(*res)
 
-print(average_precision(true_list,pred_wids))
+
+#==================================
+
+
+res=[]
+token = tokenize('migraine')
+w = filter_tokens(token, english_stopwords)
+dic={}
+for word in w:
+    x=read_posting_list_title(title_index,word)
+    for post in x:
+         if post[0] not in dic:
+             dic[post[0]]=post[1]
+         else:
+             dic[post[0]]= dic[post[0]]+post[1]
+
+res= [(doc_id, score) for doc_id, score in dic.items()]
+
+print(res)

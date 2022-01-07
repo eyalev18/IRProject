@@ -2,6 +2,8 @@ import math
 
 import numpy as np
 import pandas as pd
+import pickle
+
 Q=[0.,0,2]
 
 D = np.zeros((1, 3))
@@ -23,3 +25,4 @@ for i in range(len(D)):
     print(sum_down)
     total = up / sum_down
     print(total)
+

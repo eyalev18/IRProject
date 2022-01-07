@@ -28,6 +28,8 @@ class MultiFileReader:
     def __init__(self):
         self._open_files = {}
 
+
+
     def read(self, locs, n_bytes):
         b = []
         #locs = [locs]
@@ -37,6 +39,21 @@ class MultiFileReader:
             if f_name not in self._open_files:
                 #self._open_files[f_name] = open(f_name, 'rb')
                 self._open_files[f_name] = open('postings_gcp/'+f_name, 'rb')
+            f = self._open_files[f_name]
+            f.seek(offset)
+            n_read = min(n_bytes, BLOCK_SIZE - offset)
+            b.append(f.read(n_read))
+            n_bytes -= n_read
+        return b''.join(b)
+
+    def title_read(self, locs, n_bytes):
+        b = []
+        #locs = [locs]
+        for f_name, offset in locs:
+            # for f_name in locs:
+
+            if f_name not in self._open_files:
+                self._open_files[f_name] = open('postings_title/'+f_name, 'rb')
             f = self._open_files[f_name]
             f.seek(offset)
             n_read = min(n_bytes, BLOCK_SIZE - offset)
@@ -64,6 +81,16 @@ def read_posting_list(inverted, w):
       posting_list.append((doc_id, tf))
     return posting_list
 
+def read_posting_list_title(inverted, w):
+  with closing(MultiFileReader()) as reader:
+    locs = inverted.posting_locs[w]
+    b = reader.title_read(locs, inverted.df[w] * TUPLE_SIZE)
+    posting_list = []
+    for i in range(inverted.df[w]):
+      doc_id = int.from_bytes(b[i*TUPLE_SIZE:i*TUPLE_SIZE+4], 'big')
+      tf = int.from_bytes(b[i*TUPLE_SIZE+4:(i+1)*TUPLE_SIZE], 'big')
+      posting_list.append((doc_id, tf))
+    return posting_list
 
 
 def generate_query_tfidf_vector(query_to_search, index):
@@ -320,18 +347,17 @@ english_stopwords = frozenset(stopwords.words('english'))
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]='myfirstproject-329911-1e93f669b9fa.json'
 
 
-with open(f'postings_gcp/index.pkl', 'rb') as inp:
-        inverted = pickle.load(inp)
-
-# bucket_name='315302083'
-# client = storage.Client()
-# blobs = client.list_blobs(bucket_name)
-# for b in blobs:
-#     if(b.name=='postings_gcp/index.pkl'):
-#         x=b
+# with open(f'postings_gcp/index.pkl', 'rb') as inp:
+#         inverted = pickle.load(inp)
 #
-# with open(x, 'rb') as inp:
-#     inverted = pickle.load(inp)
+# with open(f'postings_title\TitleIndex.pkl', 'rb') as inp:
+#     title_index = pickle.load(inp)
+#
+# df = pd.read_csv('PageRank.csv', header=None)
+# df.columns = ['0', '1']
+
+with open(f'pageviews.pkl', 'rb') as f:
+  wid2pv = pickle.loads(f.read())
 
 #==================
 
@@ -342,6 +368,7 @@ class MyFlaskApp(Flask):
 
 app = MyFlaskApp(__name__)
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
+
 
 
 @app.route("/search")
@@ -382,7 +409,9 @@ def search():
             shortQ.append(x)
     cs = cosine_similarity(D, shortQ)
     res = get_top_n(cs, N=100)
-
+    for num in range(len(res)):
+        tup=(res[num][0],title_index.titles[res[num][0]])
+        res[num]=tup
 
     # END SOLUTION
     return jsonify(res)
@@ -436,6 +465,24 @@ def search_title():
     if len(query) == 0:
         return jsonify(res)
     # BEGIN SOLUTION
+
+    token = tokenize(query)
+    w = filter_tokens(token, english_stopwords)
+    dic={}
+    for word in w:
+        x=read_posting_list_title(title_index,word)
+        for post in x:
+            if post[0] not in dic:
+                dic[post[0]]=1
+            else:
+                dic[post[0]]= dic[post[0]]+1
+    #res= [(doc_id, score) for doc_id, score in dic.items()]
+    res= sorted([(doc_id, score) for doc_id, score in dic.items()], key=lambda x: x[1], reverse=True)
+    for num in range(len(res)):
+        tup=(res[num][0],title_index.titles[res[num][0]])
+        res[num]=tup
+
+
 
     # END SOLUTION
     return jsonify(res)
@@ -491,6 +538,13 @@ def get_pagerank():
         return jsonify(res)
     # BEGIN SOLUTION
 
+
+    # print(df)
+
+
+
+    for i in wiki_ids:
+        res.append(df.loc[df['0'] == i, '1'].iloc[0])
     # END SOLUTION
     return jsonify(res)
 
@@ -518,6 +572,9 @@ def get_pageview():
     if len(wiki_ids) == 0:
         return jsonify(res)
     # BEGIN SOLUTION
+
+    for i in wiki_ids:
+        res.append(wid2pv[i])
 
     # END SOLUTION
     return jsonify(res)
