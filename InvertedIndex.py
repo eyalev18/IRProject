@@ -12,6 +12,12 @@ from time import time
 from google.cloud import storage
 import os
 
+
+# df = pd.read_csv('PageRank.csv', header=None)
+# df.columns = ['0', '1']
+#
+# df_dict=df.to_dict()
+
 #'myfirstproject-329911-1e93f669b9fa.json'
 # b'C:\Users\Owner\Downloads\'myfirstproject-329911-1e93f669b9fa.json'ucket_name = '315302083'
 # os.environ["GOOGLE_APPLICATION_CREDENTIALS"]='myfirstproject-329911-1e93f669b9fa.json'
@@ -39,9 +45,11 @@ with open(f'postings_title\TitleIndex.pkl', 'rb') as inp:
 
 
 
-# with open(f'postings_gcp\index.pkl', 'rb') as inp:
-#     inverted = pickle.load(inp)
+with open(f'postings_gcp\index.pkl', 'rb') as inp:
+    inverted = pickle.load(inp)
 
+# with open(f'pageviews.pkl', 'rb') as f:
+#   wid2pv = pickle.loads(f.read())
 
 # with open(x, 'rb') as inp:
 #     inverted = pickle.load(inp)
@@ -151,8 +159,8 @@ def read_posting_list_title(inverted, w):
       posting_list.append((doc_id, tf))
     return posting_list
 
-list_of_doc = read_posting_list(title_index, 'python')
-print(list_of_doc)
+# list_of_doc = read_posting_list(title_index, 'python')
+# print(list_of_doc)
 
 def generate_query_tfidf_vector(query_to_search, index):
     """
@@ -340,11 +348,25 @@ def cosine_similarity(D, Q):
         # sum_down = (left * right) ** 0.5
         # total = up / sum_down
         #dic[int(D.iloc[i].name)] = round(total, 5)
+        # if(D.iloc[i].name in df['0']):
+        #     up=up*df.loc[df['0'] == D.iloc[i].name, '1'].iloc[0]
+        #print('xxxxxxxxxx')
         dic[int(D.iloc[i].name)] = round(up, 5)
+
+    all_values = dic.values()
+    #m = max(all_values)
+    #m=10000000
+    #m=max(dic, key=dic.get)
+    #print(m)
+    # for item in dic:
+    #     if(item in df_dict):
+    #         dic[item]= (dic[item]/m)*df_dict[item]
+    #     else:
+    #         dic[item]=  dic[item]/m
     return dic
 
 
-def get_top_n(sim_dict, N=3):
+def get_top_n(query,sim_dict, N=3):
     """
     Sort and return the highest N documents according to the cosine similarity score.
     Generate a dictionary of cosine similarity scores
@@ -361,9 +383,31 @@ def get_top_n(sim_dict, N=3):
     -----------
     a ranked list of pairs (doc_id, score) in the length of N.
     """
+    lst= sorted([(doc_id, round(score, 5)) for doc_id, score in sim_dict.items()], key=lambda x: x[1], reverse=True)
 
-    return sorted([(doc_id, round(score, 5)) for doc_id, score in sim_dict.items()], key=lambda x: x[1], reverse=True)[
+    dic = {}
+    for word in w:
+        x = read_posting_list_title(title_index, word)
+        for post in x:
+            if post[0] not in dic:
+                dic[post[0]] = 1
+            else:
+                dic[post[0]] = dic[post[0]] + 1
+    # res= [(doc_id, score) for doc_id, score in dic.items()]
+#    res = sorted([(doc_id, score) for doc_id, score in dic.items()], key=lambda x: x[1], reverse=True)
+
+
+
+
+    ret_lst=[]
+    for i in lst:
+        if(i[0] in dic):
+             ret_lst.append((i[0],dic[i[0]]))
+        else:
+            ret_lst.append((i[0],1))
+    return sorted(ret_lst,key=lambda x: x[1], reverse=True)[
            :N]
+   # return sorted([(doc_id, round(score, 5)) for doc_id, score in sim_dict.items()], key=lambda x: x[1], reverse=True)[:N]
 
 
 RE_WORD = re.compile(r"""[\#\@\w](['\-]?\w){,24}""", re.UNICODE)
@@ -444,49 +488,51 @@ RE_WORD = re.compile(r"""[\#\@\w](['\-]?\w){2,24}""", re.UNICODE)
 # print(topn)
 
 
-#
-# def average_precision(true_list, predicted_list, k=40):
-#     true_set = frozenset(true_list)
-#     predicted_list = predicted_list[:k]
-#     precisions = []
-#     for i,doc_id in enumerate(predicted_list):
-#         if doc_id in true_set:
-#             prec = (len(precisions)+1) / (i+1)
-#             precisions.append(prec)
-#     if len(precisions) == 0:
-#         return 0.0
-#     return round(sum(precisions)/len(precisions),3)
-#
-# import json
-#
-# with open('queries_train.json', 'rt') as f:
-#   queries = json.load(f)
-#
-# qs_res = []
-# a=0
-# for q, true_wids in queries.items():
-#     duration, ap = None, None
-#     t_start = time()
-#     token=tokenize(q)
-#     w=filter_tokens(token,english_stopwords)
-#     Q = (generate_query_tfidf_vector(w, inverted))
-#     D=generate_document_tfidf_matrix(w,inverted)
-#     shortQ=[]
-#     for x in Q:
-#         if (x!=0):
-#             shortQ.append(x)
-#     #print(shortQ )
-#     cs=cosine_similarity(D, shortQ)
-#     topn=get_top_n(cs, N=100)
-#     duration = time() - t_start
-#     #print(topn)
-#     pred_wids, _ = zip(*topn)
-#     ap = average_precision(true_wids, pred_wids)
-#     qs_res.append((q, duration, ap))
-#     print((q, duration, ap))
-#     a+=ap
-# print(qs_res)
-# print(a/len(qs_res))
+
+def average_precision(true_list, predicted_list, k=40):
+    true_set = frozenset(true_list)
+    predicted_list = predicted_list[:k]
+    precisions = []
+    for i,doc_id in enumerate(predicted_list):
+        if doc_id in true_set:
+            prec = (len(precisions)+1) / (i+1)
+            precisions.append(prec)
+    if len(precisions) == 0:
+        return 0.0
+    return round(sum(precisions)/len(precisions),3)
+
+import json
+
+with open('queries_train.json', 'rt') as f:
+  queries = json.load(f)
+
+
+qs_res = []
+a=0
+for q, true_wids in queries.items():
+    duration, ap = None, None
+    t_start = time()
+    token=tokenize(q)
+    w=filter_tokens(token,english_stopwords)
+    Q = (generate_query_tfidf_vector(w, inverted))
+    D=generate_document_tfidf_matrix(w,inverted)
+    shortQ=[]
+    for x in Q:
+        if (x!=0):
+            shortQ.append(x)
+    #print(shortQ )
+
+    cs=cosine_similarity(D, shortQ)
+    topn=get_top_n(w,cs, N=100)
+    duration = time() - t_start
+    #print(topn)
+    pred_wids, _ = zip(*topn)
+    ap = average_precision(true_wids, pred_wids)
+    qs_res.append((q, duration, ap))
+    print((q, duration, ap))
+    a+=ap
+print(qs_res)
+print(a/len(qs_res))
 # where_does_vanilla_flavoring_come_from=['where','does','vanilla','flavoring','come','from']
 
 #3951433,62637003,103325
@@ -529,19 +575,19 @@ RE_WORD = re.compile(r"""[\#\@\w](['\-]?\w){2,24}""", re.UNICODE)
 
 #==================================
 
-
-res=[]
-token = tokenize('migraine')
-w = filter_tokens(token, english_stopwords)
-dic={}
-for word in w:
-    x=read_posting_list_title(title_index,word)
-    for post in x:
-         if post[0] not in dic:
-             dic[post[0]]=post[1]
-         else:
-             dic[post[0]]= dic[post[0]]+post[1]
-
-res= [(doc_id, score) for doc_id, score in dic.items()]
-
-print(res)
+#
+# res=[]
+# token = tokenize('migraine')
+# w = filter_tokens(token, english_stopwords)
+# dic={}
+# for word in w:
+#     x=read_posting_list_title(title_index,word)
+#     for post in x:
+#          if post[0] not in dic:
+#              dic[post[0]]=post[1]
+#          else:
+#              dic[post[0]]= dic[post[0]]+post[1]
+#
+# res= [(doc_id, score) for doc_id, score in dic.items()]
+#
+# print(res)

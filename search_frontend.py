@@ -61,6 +61,22 @@ class MultiFileReader:
             n_bytes -= n_read
         return b''.join(b)
 
+    def anchor_read(self, locs, n_bytes):
+        b = []
+        #locs = [locs]
+        for f_name, offset in locs:
+            # for f_name in locs:
+
+            if f_name not in self._open_files:
+                self._open_files[f_name] = open('postings_anchor/'+f_name, 'rb')
+            f = self._open_files[f_name]
+            f.seek(offset)
+            n_read = min(n_bytes, BLOCK_SIZE - offset)
+            b.append(f.read(n_read))
+            n_bytes -= n_read
+        return b''.join(b)
+
+
     def close(self):
         for f in self._open_files.values():
             f.close()
@@ -85,6 +101,18 @@ def read_posting_list_title(inverted, w):
   with closing(MultiFileReader()) as reader:
     locs = inverted.posting_locs[w]
     b = reader.title_read(locs, inverted.df[w] * TUPLE_SIZE)
+    posting_list = []
+    for i in range(inverted.df[w]):
+      doc_id = int.from_bytes(b[i*TUPLE_SIZE:i*TUPLE_SIZE+4], 'big')
+      tf = int.from_bytes(b[i*TUPLE_SIZE+4:(i+1)*TUPLE_SIZE], 'big')
+      posting_list.append((doc_id, tf))
+    return posting_list
+
+
+def read_posting_list_anchor(inverted, w):
+  with closing(MultiFileReader()) as reader:
+    locs = inverted.posting_locs[w]
+    b = reader.anchor_read(locs, inverted.df[w] * TUPLE_SIZE)
     posting_list = []
     for i in range(inverted.df[w]):
       doc_id = int.from_bytes(b[i*TUPLE_SIZE:i*TUPLE_SIZE+4], 'big')
@@ -350,11 +378,16 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"]='myfirstproject-329911-1e93f669b9fa
 # with open(f'postings_gcp/index.pkl', 'rb') as inp:
 #         inverted = pickle.load(inp)
 #
-# with open(f'postings_title\TitleIndex.pkl', 'rb') as inp:
-#     title_index = pickle.load(inp)
+with open(f'postings_title\TitleIndex.pkl', 'rb') as inp:
+    title_index = pickle.load(inp)
 #
 # df = pd.read_csv('PageRank.csv', header=None)
 # df.columns = ['0', '1']
+
+with open(f'postings_anchor/AnchorIndex.pkl', 'rb') as inp:
+        anchor_index = pickle.load(inp)
+
+
 
 with open(f'pageviews.pkl', 'rb') as f:
   wid2pv = pickle.loads(f.read())
@@ -512,6 +545,26 @@ def search_anchor():
         return jsonify(res)
     # BEGIN SOLUTION
 
+
+    token = tokenize(query)
+    w = filter_tokens(token, english_stopwords)
+    dic={}
+    for word in w:
+        x=read_posting_list_anchor(anchor_index,word)
+        for post in x:
+            if post[0] not in dic:
+                dic[post[0]]=1
+            else:
+                dic[post[0]]= dic[post[0]]+1
+    #res= [(doc_id, score) for doc_id, score in dic.items()]
+    res= sorted([(doc_id, score) for doc_id, score in dic.items()], key=lambda x: x[1], reverse=True)
+    for num in range(len(res)):
+        tup=(res[num][0],title_index.titles[res[num][0]])
+        res[num]=tup
+
+
+
+
     # END SOLUTION
     return jsonify(res)
 
@@ -571,7 +624,8 @@ def get_pageview():
     wiki_ids = request.get_json()
     if len(wiki_ids) == 0:
         return jsonify(res)
-    # BEGIN SOLUTION
+    # BEGIN SOLU for i in wiki_ids:
+    #         res.append(wid2pv[i])TION
 
     for i in wiki_ids:
         res.append(wid2pv[i])
