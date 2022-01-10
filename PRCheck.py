@@ -16,8 +16,8 @@
 
 
 
-lst=[3434750,10568,32927]
-res=[]
-for i in lst:
-    res.append(counter[i])
-print(res)
+# lst=[3434750,10568,32927]
+# res=[]
+# for i in lst:
+#     res.append(counter[i])
+# print(res)

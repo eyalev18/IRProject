@@ -12,6 +12,16 @@ from time import time
 from google.cloud import storage
 import os
 
+# with open(f'postings_gcp_tfidf.pkl', 'rb') as inp:
+#     tfidf = pickle.load(inp)
+
+# with open(f'postings_gcp_DL.pkl', 'rb') as inp:
+#      DL = pickle.load(inp)with open(f'postings_gcp_DL.pkl', 'rb') as inp:
+#      DL = pickle.load(inp)
+
+
+# with open('Doc_Tf_Idf.pickle', 'rb') as handle:
+#     b = pickle.load(handle)
 
 # df = pd.read_csv('PageRank.csv', header=None)
 # df.columns = ['0', '1']
@@ -183,20 +193,41 @@ def generate_query_tfidf_vector(query_to_search, index):
     vectorized query with tfidf scores
     """
 
+    # epsilon = .0000001
+    # total_vocab_size = len(index.df)
+    # Q = np.zeros((total_vocab_size))
+    # term_vector = list(index.df.keys())
+    # counter = Counter(query_to_search)
+    # for token in np.unique(query_to_search):
+    #     if token in index.df.keys():  # avoid terms that do not appear in the index.
+    #         tf = counter[token] / len(query_to_search)  # term frequency divded by the length of the query
+    #         df = index.df[token]
+    #         #idf = math.log((len(DL)) / (df + epsilon), 10)  # smoothing
+    #         idf = math.log((6348910) / (df + epsilon), 10) # smoothing
+    #         try:
+    #             ind = term_vector.index(token)
+    #             Q[ind] = tf * idf
+    #
+    #         except:
+    #             pass
+    # return Q
+
     epsilon = .0000001
-    total_vocab_size = len(index.df)
-    Q = np.zeros((total_vocab_size))
-    term_vector = list(index.df.keys())
+    #total_vocab_size = len(index.df)
+    #Q = np.zeros((total_vocab_size))
+    Q=[]
+    #term_vector = list(index.df.keys())
     counter = Counter(query_to_search)
     for token in np.unique(query_to_search):
         if token in index.df.keys():  # avoid terms that do not appear in the index.
             tf = counter[token] / len(query_to_search)  # term frequency divded by the length of the query
             df = index.df[token]
-            #idf = math.log((len(DL)) / (df + epsilon), 10)  # smoothing
-            idf = math.log((6348910) / (df + epsilon), 10) # smoothing
+            # idf = math.log((len(DL)) / (df + epsilon), 10)  # smoothing
+            idf = math.log((6348910) / (df + epsilon), 10)  # smoothing
             try:
-                ind = term_vector.index(token)
-                Q[ind] = tf * idf
+                #ind = term_vector.index(token)
+                Q.append(tf * idf)
+                #Q[ind] = tf * idf
 
             except:
                 pass
@@ -233,16 +264,18 @@ def get_candidate_documents_and_scores(query_to_search, index):
     candidates = {}
     N = 6348910
     for term in np.unique(query_to_search):
-        list_of_doc = read_posting_list(index, term)
-        test = dict(list_of_doc)
-        if len(list_of_doc)>0:
-            normlized_tfidf = [(doc_id, freq * math.log(N / index.df[term], 10)) for doc_id, freq in
-                               list_of_doc]
-            #print(normlized_tfidf)
-            for doc_id, tfidf in normlized_tfidf:
-                candidates[(doc_id, term)] = candidates.get((doc_id, term), 0) + tfidf
+        if term in index.df.keys():
+            list_of_doc = read_posting_list(index, term)
+            test = dict(list_of_doc)
+            if len(list_of_doc)>0:
+                normlized_tfidf = [(doc_id, freq * math.log(N / index.df[term], 10)) for doc_id, freq in
+                                   list_of_doc]
+                #print(normlized_tfidf)
+                for doc_id, tfidf in normlized_tfidf:
+                    candidates[(doc_id, term)] = candidates.get((doc_id, term), 0) + tfidf
     #candidates= take(20,000, candidates.items())
-    candidates= dict(sorted(candidates.items(), key=itemgetter(1), reverse=True)[:18000])
+    candidates= dict(sorted(candidates.items(), key=itemgetter(1), reverse=True)[: 20000])
+    #
     #candidates = dict(sorted(candidates.items(), key=itemgetter(1), reverse=True))
     return candidates
 
@@ -268,29 +301,50 @@ def generate_document_tfidf_matrix(query_to_search, index):
     DataFrame of tfidf scores.
     """
 
-    total_vocab_size = len(index.df)
+    # total_vocab_size = len(index.df)
+    # candidates_scores = get_candidate_documents_and_scores(query_to_search, index)  # We do not need to utilize all document. Only the docuemnts which have corrspoinding terms with the query.
+    # unique_candidates = np.unique([doc_id for doc_id, freq in candidates_scores.keys()])
+    # #print(len(unique_candidates))
+    # #D = np.zeros((len(unique_candidates), total_vocab_size))
+    # D = np.zeros((len(unique_candidates), len(query_to_search)))
+    #
+    # D = pd.DataFrame(D)
+    #
+    # D.index = unique_candidates
+    # #D.columns = index.df.keys()\
+    # D.columns = query_to_search
+    #
+    #
+    # for key in candidates_scores:
+    #     tfidf = candidates_scores[key]
+    #     doc_id, term = key
+    #     if(tfidf!=0):
+    #         D.loc[doc_id][term] = tfidf
+    #
+    # return D
+
+    D={}
     candidates_scores = get_candidate_documents_and_scores(query_to_search, index)  # We do not need to utilize all document. Only the docuemnts which have corrspoinding terms with the query.
-    unique_candidates = np.unique([doc_id for doc_id, freq in candidates_scores.keys()])
-    #print(len(unique_candidates))
-    #D = np.zeros((len(unique_candidates), total_vocab_size))
-    D = np.zeros((len(unique_candidates), len(query_to_search)))
-
-    D = pd.DataFrame(D)
-
-    D.index = unique_candidates
-    #D.columns = index.df.keys()\
-    D.columns = query_to_search
-
 
     for key in candidates_scores:
         tfidf = candidates_scores[key]
         doc_id, term = key
         if(tfidf!=0):
-            D.loc[doc_id][term] = tfidf
+            if(doc_id in D):
+                D[doc_id].append(tfidf)
+            else:
+                D[doc_id]=[tfidf]
 
     return D
 
+
+
 #=====================================
+
+
+
+
+
 
 def cosine_similarity(D, Q):
     """
@@ -312,10 +366,66 @@ def cosine_similarity(D, Q):
                                                                 value: cosine similarty score.
     """
     # YOUR CODE HERE
+  #   dic = {}
+  # #  left = sum([a ** 2 for a in Q])
+  #   for i in range(len(D)):
+  #       x=0
+  #       # ser=pd.Series(D.iloc[i])
+  #       # min=ser.min()
+  #       # max=ser.max()
+  #       # diff=max-min
+  #       # if(diff==0):
+  #       #     diff=1
+  #       # v=ser.var()
+  #
+  #       # v=v/100
+  #       #print(v)
+  #       # ser = pd.Series(D.iloc[i])
+  #       # var = ser.var()
+  #       for j in D.iloc[i]:
+  #           if(j!=0):
+  #               x+=1
+  #       #if(D.iloc[i].name in [3951433,62637003,103325,19492975,2009711]):
+  #
+  #           #print((i,max-min))
+  #
+  #       up = sum([a * b for a, b in zip(Q, D.iloc[i])])
+  #       up=up*x
+  #       # if D.iloc[i].name in [35458904, 27051151, 2155752]:
+  #       #     print(v)
+  #       #     print(up)
+  #       # if (x > 1):
+  #       #  up=up/var
+  #
+  #       #up=up/diff
+  #       # right = sum([a ** 2 for a in D.iloc[i]])
+  #       # sum_down = (left * right) ** 0.5
+  #       # total = up / sum_down
+  #       #dic[int(D.iloc[i].name)] = round(total, 5)
+  #       # if(D.iloc[i].name in df['0']):
+  #       #     up=up*df.loc[df['0'] == D.iloc[i].name, '1'].iloc[0]
+  #       #print('xxxxxxxxxx')
+  #       dic[int(D.iloc[i].name)] = round(up, 5)
+  #
+  #   all_values = dic.values()
+  #   #m = max(all_values)
+  #   #m=10000000
+  #   #m=max(dic, key=dic.get)
+  #   #print(m)
+  #   # for item in dic:
+  #   #     if(item in df_dict):
+  #   #         dic[item]= (dic[item]/m)*df_dict[item]
+  #   #     else:
+  #   #         dic[item]=  dic[item]/m
+  #   return dic
+
+
+
+
     dic = {}
-  #  left = sum([a ** 2 for a in Q])
-    for i in range(len(D)):
-        x=0
+    #left = sum([a ** 2 for a in Q])
+    for i in D:
+        x = 0
         # ser=pd.Series(D.iloc[i])
         # min=ser.min()
         # max=ser.max()
@@ -325,39 +435,45 @@ def cosine_similarity(D, Q):
         # v=ser.var()
 
         # v=v/100
-        #print(v)
+        # print(v)
         # ser = pd.Series(D.iloc[i])
         # var = ser.var()
-        for j in D.iloc[i]:
-            if(j!=0):
-                x+=1
-        #if(D.iloc[i].name in [3951433,62637003,103325,19492975,2009711]):
+        for j in D[i]:
+            if (j != 0):
+                x += 1
+        # if(D.iloc[i].name in [3951433,62637003,103325,19492975,2009711]):
 
-            #print((i,max-min))
+        # print((i,max-min))
 
-        up = sum([a * b for a, b in zip(Q, D.iloc[i])])
-        up=up*x
+        up = sum([a * b for a, b in zip(Q, D[i])])
+        up = up * x
+        #up=up/700000
         # if D.iloc[i].name in [35458904, 27051151, 2155752]:
         #     print(v)
         #     print(up)
         # if (x > 1):
         #  up=up/var
 
-        #up=up/diff
-        # right = sum([a ** 2 for a in D.iloc[i]])
+        # up=up/diff
+        # if(i in tfidf):
+        #     right = tfidf[i]
+        # else:
+        #     right=1
         # sum_down = (left * right) ** 0.5
         # total = up / sum_down
-        #dic[int(D.iloc[i].name)] = round(total, 5)
+        # dic[int(D.iloc[i].name)] = round(total, 5)
         # if(D.iloc[i].name in df['0']):
         #     up=up*df.loc[df['0'] == D.iloc[i].name, '1'].iloc[0]
-        #print('xxxxxxxxxx')
-        dic[int(D.iloc[i].name)] = round(up, 5)
+        # print('xxxxxxxxxx')
+        dic[int(i)] = round(up, 5)
+        #dic[int(i)] = round(total, 5)
+
 
     all_values = dic.values()
-    #m = max(all_values)
-    #m=10000000
-    #m=max(dic, key=dic.get)
-    #print(m)
+    # m = max(all_values)
+    # m=10000000
+    # m=max(dic, key=dic.get)
+    # print(m)
     # for item in dic:
     #     if(item in df_dict):
     #         dic[item]= (dic[item]/m)*df_dict[item]
@@ -366,7 +482,12 @@ def cosine_similarity(D, Q):
     return dic
 
 
-def get_top_n(query,sim_dict, N=3):
+
+
+
+
+
+def get_top_n(index,query,sim_dict, N=3):
     """
     Sort and return the highest N documents according to the cosine similarity score.
     Generate a dictionary of cosine similarity scores
@@ -386,13 +507,14 @@ def get_top_n(query,sim_dict, N=3):
     lst= sorted([(doc_id, round(score, 5)) for doc_id, score in sim_dict.items()], key=lambda x: x[1], reverse=True)
 
     dic = {}
-    for word in w:
-        x = read_posting_list_title(title_index, word)
-        for post in x:
-            if post[0] not in dic:
-                dic[post[0]] = 1
-            else:
-                dic[post[0]] = dic[post[0]] + 1
+    for word in query:
+        if word in index.df.keys():
+            x = read_posting_list_title(title_index, word)
+            for post in x:
+                if post[0] not in dic:
+                    dic[post[0]] = 1
+                else:
+                    dic[post[0]] = dic[post[0]] + 1
     # res= [(doc_id, score) for doc_id, score in dic.items()]
 #    res = sorted([(doc_id, score) for doc_id, score in dic.items()], key=lambda x: x[1], reverse=True)
 
@@ -407,7 +529,8 @@ def get_top_n(query,sim_dict, N=3):
             ret_lst.append((i[0],1))
     return sorted(ret_lst,key=lambda x: x[1], reverse=True)[
            :N]
-   # return sorted([(doc_id, round(score, 5)) for doc_id, score in sim_dict.items()], key=lambda x: x[1], reverse=True)[:N]
+
+    #return sorted([(doc_id, round(score, 5)) for doc_id, score in sim_dict.items()], key=lambda x: x[1], reverse=True)[:N]
 
 
 RE_WORD = re.compile(r"""[\#\@\w](['\-]?\w){,24}""", re.UNICODE)
@@ -467,7 +590,7 @@ RE_WORD = re.compile(r"""[\#\@\w](['\-]?\w){2,24}""", re.UNICODE)
 
 
 
-# word= "best marvel"
+# word= "besttttt"
 # token=tokenize(word)
 # w=filter_tokens(token,english_stopwords)
 # print(w)
@@ -484,7 +607,7 @@ RE_WORD = re.compile(r"""[\#\@\w](['\-]?\w){2,24}""", re.UNICODE)
 # # print(shortQ)
 #
 # cs=cosine_similarity(D, shortQ)
-# topn=get_top_n(cs, N=100)
+# topn=get_top_n(inverted,w,cs, N=100)
 # print(topn)
 
 
@@ -509,6 +632,7 @@ with open('queries_train.json', 'rt') as f:
 
 qs_res = []
 a=0
+t=0
 for q, true_wids in queries.items():
     duration, ap = None, None
     t_start = time()
@@ -516,14 +640,15 @@ for q, true_wids in queries.items():
     w=filter_tokens(token,english_stopwords)
     Q = (generate_query_tfidf_vector(w, inverted))
     D=generate_document_tfidf_matrix(w,inverted)
-    shortQ=[]
-    for x in Q:
-        if (x!=0):
-            shortQ.append(x)
+    # shortQ=[]
+    # for x in Q:
+    #     if (x!=0):
+    #         shortQ.append(x)
     #print(shortQ )
 
-    cs=cosine_similarity(D, shortQ)
-    topn=get_top_n(w,cs, N=100)
+    #cs=cosine_similarity(D, shortQ)
+    cs=cosine_similarity(D, Q)
+    topn=get_top_n(inverted,w,cs, N=100)
     duration = time() - t_start
     #print(topn)
     pred_wids, _ = zip(*topn)
@@ -531,8 +656,12 @@ for q, true_wids in queries.items():
     qs_res.append((q, duration, ap))
     print((q, duration, ap))
     a+=ap
+    t+=duration
+
 print(qs_res)
 print(a/len(qs_res))
+print(t/len(qs_res))
+
 # where_does_vanilla_flavoring_come_from=['where','does','vanilla','flavoring','come','from']
 
 #3951433,62637003,103325

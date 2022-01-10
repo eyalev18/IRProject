@@ -143,19 +143,21 @@ def generate_query_tfidf_vector(query_to_search, index):
     """
 
     epsilon = .0000001
-    total_vocab_size = len(index.df)
-    Q = np.zeros((total_vocab_size))
+    # total_vocab_size = len(index.df)
+    # Q = np.zeros((total_vocab_size))
+    Q = []
     term_vector = list(index.df.keys())
     counter = Counter(query_to_search)
     for token in np.unique(query_to_search):
         if token in index.df.keys():  # avoid terms that do not appear in the index.
             tf = counter[token] / len(query_to_search)  # term frequency divded by the length of the query
             df = index.df[token]
-            #idf = math.log((len(DL)) / (df + epsilon), 10)  # smoothing
-            idf = math.log((6348910) / (df + epsilon), 10) # smoothing
+            # idf = math.log((len(DL)) / (df + epsilon), 10)  # smoothing
+            idf = math.log((6348910) / (df + epsilon), 10)  # smoothing
             try:
-                ind = term_vector.index(token)
-                Q[ind] = tf * idf
+                # ind = term_vector.index(token)
+                Q.append(tf * idf)
+                # Q[ind] = tf * idf
 
             except:
                 pass
@@ -192,13 +194,14 @@ def get_candidate_documents_and_scores(query_to_search, index):
     candidates = {}
     N = 6348910
     for term in np.unique(query_to_search):
-        list_of_doc = read_posting_list(index, term)
-        if len(list_of_doc)>0:
-            normlized_tfidf = [(doc_id, freq * math.log(N / index.df[term], 10)) for doc_id, freq in
-                               list_of_doc]
+        if term in index.df.keys():
+            list_of_doc = read_posting_list(index, term)
+            if len(list_of_doc)>0:
+                normlized_tfidf = [(doc_id, freq * math.log(N / index.df[term], 10)) for doc_id, freq in
+                                   list_of_doc]
 
-            for doc_id, tfidf in normlized_tfidf:
-                candidates[(doc_id, term)] = candidates.get((doc_id, term), 0) + tfidf
+                for doc_id, tfidf in normlized_tfidf:
+                    candidates[(doc_id, term)] = candidates.get((doc_id, term), 0) + tfidf
     #candidates= take(20,000, candidates.items())
     candidates= dict(sorted(candidates.items(), key=itemgetter(1), reverse=True)[:18000])
     #candidates = dict(sorted(candidates.items(), key=itemgetter(1), reverse=True))
@@ -222,28 +225,21 @@ def generate_document_tfidf_matrix(query_to_search, index):
 
     words,pls: generator for working with posting.
     Returns:
-    -----------
     DataFrame of tfidf scores.
     """
 
-    total_vocab_size = len(index.df)
-    candidates_scores = get_candidate_documents_and_scores(query_to_search, index)  # We do not need to utilize all document. Only the docuemnts which have corrspoinding terms with the query.
-    unique_candidates = np.unique([doc_id for doc_id, freq in candidates_scores.keys()])
-    #print(len(unique_candidates))
-    #D = np.zeros((len(unique_candidates), total_vocab_size))
-    D = np.zeros((len(unique_candidates), len(query_to_search)))
-
-    D = pd.DataFrame(D)
-
-    D.index = unique_candidates
-    #D.columns = index.df.keys()\
-    D.columns = query_to_search
+    D = {}
+    candidates_scores = get_candidate_documents_and_scores(query_to_search,
+                                                           index)  # We do not need to utilize all document. Only the docuemnts which have corrspoinding terms with the query.
 
     for key in candidates_scores:
         tfidf = candidates_scores[key]
         doc_id, term = key
-        if(tfidf!=0):
-            D.loc[doc_id][term] = tfidf
+        if (tfidf != 0):
+            if (doc_id in D):
+                D[doc_id].append(tfidf)
+            else:
+                D[doc_id] = [tfidf]
 
     return D
 
@@ -270,46 +266,22 @@ def cosine_similarity(D, Q):
     """
     # YOUR CODE HERE
     dic = {}
-    #left = sum([a ** 2 for a in Q])
-    for i in range(len(D)):
-        x=0
-        # ser=pd.Series(D.iloc[i])
-        # min=ser.min()
-        # max=ser.max()
-        # diff=max-min
-        # if(diff==0):
-        #     diff=1
-        # v=ser.var()
+    for i in D:
+        x = 0
 
-        # v=v/100
-        #print(v)
-        # ser = pd.Series(D.iloc[i])
-        # var = ser.var()
-        for j in D.iloc[i]:
-            if(j!=0):
-                x+=1
-        #if(D.iloc[i].name in [3951433,62637003,103325,19492975,2009711]):
+        for j in D[i]:
+            if (j != 0):
+                x += 1
 
-            #print((i,max-min))
+        up = sum([a * b for a, b in zip(Q, D[i])])
+        up = up * x
 
-        up = sum([a * b for a, b in zip(Q, D.iloc[i])])
-        up=up*x
-        # if D.iloc[i].name in [35458904, 27051151, 2155752]:
-        #     print(v)
-        #     print(up)
-        # if (x > 1):
-        #  up=up/var
+        dic[int(i)] = round(up, 5)
 
-        #up=up/diff
-        # right = sum([a ** 2 for a in D.iloc[i]])
-        # sum_down = (left * right) ** 0.5
-        # total = up / sum_down
-        #dic[int(D.iloc[i].name)] = round(total, 5)
-        dic[int(D.iloc[i].name)] = round(up, 5)
     return dic
 
 
-def get_top_n(sim_dict, N=3):
+def get_top_n(index,query,sim_dict, N=3):
     """
     Sort and return the highest N documents according to the cosine similarity score.
     Generate a dictionary of cosine similarity scores
@@ -327,7 +299,24 @@ def get_top_n(sim_dict, N=3):
     a ranked list of pairs (doc_id, score) in the length of N.
     """
 
-    return sorted([(doc_id, round(score, 5)) for doc_id, score in sim_dict.items()], key=lambda x: x[1], reverse=True)[
+    lst = sorted([(doc_id, round(score, 5)) for doc_id, score in sim_dict.items()], key=lambda x: x[1], reverse=True)
+
+    dic = {}
+    for word in query:
+        if word in index.df.keys():
+            x = read_posting_list_title(title_index, word)
+            for post in x:
+                if post[0] not in dic:
+                    dic[post[0]] = 1
+                else:
+                    dic[post[0]] = dic[post[0]] + 1
+    ret_lst = []
+    for i in lst:
+        if (i[0] in dic):
+            ret_lst.append((i[0], dic[i[0]]))
+        else:
+            ret_lst.append((i[0], 1))
+    return sorted(ret_lst, key=lambda x: x[1], reverse=True)[
            :N]
 
 
@@ -375,20 +364,22 @@ english_stopwords = frozenset(stopwords.words('english'))
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]='myfirstproject-329911-1e93f669b9fa.json'
 
 
-# with open(f'postings_gcp/index.pkl', 'rb') as inp:
-#         inverted = pickle.load(inp)
+with open(f'postings_gcp/index.pkl', 'rb') as inp:
+        inverted = pickle.load(inp)
 #
-with open(f'postings_title\TitleIndex.pkl', 'rb') as inp:
+# with open(f'postings_title\TitleIndex.pkl', 'rb') as inp:
+#     title_index = pickle.load(inp)
+#
+with open(f'TitleIndex.pkl', 'rb') as inp:
     title_index = pickle.load(inp)
+
+df = pd.read_csv('PageRank.csv', header=None)
+df.columns = ['0', '1']
+
+# with open(f'postings_anchor/AnchorIndex.pkl', 'rb') as inp:
+#         anchor_index = pickle.load(inp)
+
 #
-# df = pd.read_csv('PageRank.csv', header=None)
-# df.columns = ['0', '1']
-
-with open(f'postings_anchor/AnchorIndex.pkl', 'rb') as inp:
-        anchor_index = pickle.load(inp)
-
-
-
 with open(f'pageviews.pkl', 'rb') as f:
   wid2pv = pickle.loads(f.read())
 
@@ -441,10 +432,11 @@ def search():
         if (x != 0):
             shortQ.append(x)
     cs = cosine_similarity(D, shortQ)
-    res = get_top_n(cs, N=100)
+    res = get_top_n(inverted,w,cs, N=100)
     for num in range(len(res)):
-        tup=(res[num][0],title_index.titles[res[num][0]])
-        res[num]=tup
+        if(res[num][0] in title_index.titles.keys()):
+            tup=(res[num][0],title_index.titles[res[num][0]])
+            res[num]=tup
 
     # END SOLUTION
     return jsonify(res)
@@ -471,6 +463,24 @@ def search_body():
     if len(query) == 0:
         return jsonify(res)
     # BEGIN SOLUTION
+
+    token = tokenize(query)
+    w = filter_tokens(token, english_stopwords)
+    Q = (generate_query_tfidf_vector(w, inverted))
+    D = generate_document_tfidf_matrix(w, inverted)
+    shortQ = []
+    for x in Q:
+        if (x != 0):
+            shortQ.append(x)
+    cs = cosine_similarity(D, shortQ)
+    res = get_top_n(inverted, w, cs, N=100)
+    for num in range(len(res)):
+        if (res[num][0] in title_index.titles.keys()):
+            tup = (res[num][0], title_index.titles[res[num][0]])
+            res[num] = tup
+
+
+
 
     # END SOLUTION
     return jsonify(res)
@@ -503,17 +513,19 @@ def search_title():
     w = filter_tokens(token, english_stopwords)
     dic={}
     for word in w:
-        x=read_posting_list_title(title_index,word)
-        for post in x:
-            if post[0] not in dic:
-                dic[post[0]]=1
-            else:
-                dic[post[0]]= dic[post[0]]+1
+        if word in title_index.df.keys():
+            x=read_posting_list_title(title_index,word)
+            for post in x:
+                if post[0] not in dic:
+                    dic[post[0]]=1
+                else:
+                    dic[post[0]]= dic[post[0]]+1
     #res= [(doc_id, score) for doc_id, score in dic.items()]
     res= sorted([(doc_id, score) for doc_id, score in dic.items()], key=lambda x: x[1], reverse=True)
     for num in range(len(res)):
-        tup=(res[num][0],title_index.titles[res[num][0]])
-        res[num]=tup
+        # if(res[num][0] in title_index.titles.keys()):
+            tup=(res[num][0],title_index.titles[res[num][0]])
+            res[num]=tup
 
 
 
@@ -540,27 +552,29 @@ def search_anchor():
         worst where each element is a tuple (wiki_id, title).
     '''
     res = []
-    query = request.args.get('query', '')
-    if len(query) == 0:
-        return jsonify(res)
-    # BEGIN SOLUTION
-
-
-    token = tokenize(query)
-    w = filter_tokens(token, english_stopwords)
-    dic={}
-    for word in w:
-        x=read_posting_list_anchor(anchor_index,word)
-        for post in x:
-            if post[0] not in dic:
-                dic[post[0]]=1
-            else:
-                dic[post[0]]= dic[post[0]]+1
-    #res= [(doc_id, score) for doc_id, score in dic.items()]
-    res= sorted([(doc_id, score) for doc_id, score in dic.items()], key=lambda x: x[1], reverse=True)
-    for num in range(len(res)):
-        tup=(res[num][0],title_index.titles[res[num][0]])
-        res[num]=tup
+    # query = request.args.get('query', '')
+    # if len(query) == 0:
+    #     return jsonify(res)
+    # # BEGIN SOLUTION
+    #
+    #
+    # token = tokenize(query)
+    # w = filter_tokens(token, english_stopwords)
+    # dic={}
+    # for word in w:
+    #     if word in anchor_index.df.keys():
+    #         x=read_posting_list_anchor(anchor_index,word)
+    #         for post in x:
+    #             if post[0] not in dic:
+    #                 dic[post[0]]=1
+    #             else:
+    #                 dic[post[0]]= dic[post[0]]+1
+    # #res= [(doc_id, score) for doc_id, score in dic.items()]
+    # res= sorted([(doc_id, score) for doc_id, score in dic.items()], key=lambda x: x[1], reverse=True)
+    # for num in range(len(res)):
+    #     if(res[num][0] in title_index.titles.keys()):
+    #         tup=(res[num][0],title_index.titles[res[num][0]])
+    #         res[num]=tup
 
 
 
@@ -628,7 +642,8 @@ def get_pageview():
     #         res.append(wid2pv[i])TION
 
     for i in wiki_ids:
-        res.append(wid2pv[i])
+        if i in wid2pv.keys():
+            res.append(wid2pv[i])
 
     # END SOLUTION
     return jsonify(res)
